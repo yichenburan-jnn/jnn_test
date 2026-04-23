@@ -2,67 +2,64 @@ import pickle
 import numpy as np
 from qpsolvers import solve_qp
 
-def reproduce_and_solve():
-    # 1. 修复加载逻辑
+def solve_and_save_to_csv():
+    # 1. 修复加载逻辑（防止 P 覆盖其他变量）
     try:
         with open('P.pkl', 'rb') as f:
             P = pickle.load(f)
         with open('q.pkl', 'rb') as f:
-            q = pickle.load(f)  
+            q = pickle.load(f)
         with open('G.pkl', 'rb') as f:
-            G = pickle.load(f)  
+            G = pickle.load(f)
         with open('h.pkl', 'rb') as f:
-            h = pickle.load(f)  
+            h = pickle.load(f)
+        print("✅ 数据加载成功")
     except FileNotFoundError:
-        print("未找到 pkl 文件")
-        return None
+        print("❌ 未找到 pkl 文件，请确保 P.pkl, q.pkl, G.pkl, h.pkl 在当前目录下。")
+        return
 
-    # 2. 格式与维度标准化 (非常重要)
-    # qpsolvers 严格要求向量是一维的 (N,)，而不能是二维的列向量 (N, 1)
+    # 2. 数据预处理
     P = np.array(P, dtype=np.float64)
-    q = np.array(q, dtype=np.float64).flatten() 
+    q = np.array(q, dtype=np.float64).flatten()
     G = np.array(G, dtype=np.float64)
     h = np.array(h, dtype=np.float64).flatten()
-
-    # 3. 强制对称化
-    # 消除浮点误差导致的微小不对称
+    
+    # 对称化 P 矩阵以提高数值稳定性
     P = (P + P.T) / 2
 
-    # --- 策略 A: 优先使用 osqp ---
-    print("尝试使用 osqp 求解器...")
-    try:
-        res_osqp = solve_qp(P, q, G, h, solver="osqp")
-        if res_osqp is not None:
-            print("✅ osqp 求解成功!")
-            # 过滤掉极小的浮点误差噪声 (例如将 1e-18 变为 0)
-            clean_res = np.where(np.abs(res_osqp) < 1e-10, 0.0, res_osqp)
-            print(f"结果前 5 个数据: {clean_res[:5]}")
-            return clean_res
-        else:
-            print("❌ osqp 返回了 None，可能存在约束冲突。")
-    except Exception as e:
-        print(f"osqp 运行时报错: {e}")
+    res = None
 
-    # --- 策略 B: 使用正则化 + quadprog ---
-    print("\n尝试使用正则化后的 quadprog 求解器...")
-    try:
-        # 在对角线上增加 1e-8，强制矩阵严格正定
-        epsilon = 1e-8
-        P_regularized = P + epsilon * np.eye(P.shape[0])
+    # 3. 策略 A: 优先尝试 OSQP (更接近 MATLAB 的内点法鲁棒性)
+    print("正在尝试 OSQP 求解器...")
+    res = solve_qp(P, q, G, h, solver="osqp")
+
+    # 4. 策略 B: 如果 OSQP 失败，尝试正则化后的 Quadprog
+    if res is None:
+        print("OSQP 未能求得解，尝试对 Quadprog 进行对角线正则化...")
+        try:
+            # 加上微小的扰动 epsilon 使矩阵严格正定
+            epsilon = 1e-9
+            P_reg = P + epsilon * np.eye(P.shape[0])
+            res = solve_qp(P_reg, q, G, h, solver="quadprog")
+        except Exception as e:
+            print(f"Quadprog 运行出错: {e}")
+
+    # 5. 结果处理与保存
+    if res is not None:
+        print(f"✅ 求解成功！得到 {len(res)} 个数据。")
         
-        res_quad = solve_qp(P_regularized, q, G, h, solver="quadprog")
-        if res_quad is not None:
-            print("✅ quadprog (正则化后) 求解成功!")
-            clean_res = np.where(np.abs(res_quad) < 1e-10, 0.0, res_quad)
-            print(f"结果前 5 个数据: {clean_res[:5]}")
-            return clean_res
-        else:
-            print("❌ quadprog 依然返回 None。")
-    except Exception as e:
-        print(f"quadprog 运行时报错: {e}")
-
-    print("\n⚠️ 两种求解器均未能求解。请检查 G 和 h 构成的约束条件是否存在无解的情况。")
-    return None
+        # 保存为 CSV 文件
+        # fmt='%.18e' 保证了科学计数法的高精度保存
+        filename = "matrix_x2.csv"
+        np.savetxt(filename, res, delimiter=",", fmt='%.18e', header="solution_x")
+        
+        print(f"💾 结果已保存至: {filename}")
+        
+        # 屏幕预览前 5 个非零数据的数量级
+        nonzero_count = np.sum(np.abs(res) > 1e-20)
+        print(f"预览：非零解数量约 {nonzero_count} 个")
+    else:
+        print("❌ 所有求解器均返回 None。请检查约束条件 Gx <= h 是否存在可行域。")
 
 if __name__ == "__main__":
-    result = reproduce_and_solve()
+    solve_and_save_to_csv()
