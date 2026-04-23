@@ -1,28 +1,22 @@
-# 完整的实用程序
-import os
-import sys
-import json
-import requests
-from collections import Counter
-from typing import List, Dict
+import pickle
+import numpy as np
+from qpsolvers import solve_qp
+def reproduce_and_fix():
+    try:
+        with open('P.pkl','rb') as f:
+            P = pickle.load(f)
+        with open('q.pkl','rb') as f:
+            P = pickle.load(f)
+        with open('G.pkl','rb') as f:
+            P = pickle.load(f)
+        with open('h.pkl','rb') as f:
+            P = pickle.load(f)
+    except FileNotFoundError:
+        print("未找到pkl文件")
+        return
 
-def get_user_data() -> Dict:
-    """获取示例数据"""
-    return {"name": "张三", "age": 25, "city": "北京"}
-
-def main():
-    # 使用os模块
-    print(f"当前工作目录: {os.getcwd()}")
-    
-    # 使用json模块
-    user_data = get_user_data()
-    json_str = json.dumps(user_data, ensure_ascii=False)
-    print(f"JSON数据: {json_str}")
-    
-    # 使用Counter
-    words = ['苹果', '香蕉', '苹果', '橙子', '香蕉', '苹果']
-    word_count = Counter(words)
-    print(f"单词统计: {word_count}")
+    res = solve_qb(P,q,G,h,solver="quadprog")
+    print(f"quadprog 求解结果:{res}")
 
 if __name__ == "__main__":
-    main()
+    result = reproduce_and_fix()
