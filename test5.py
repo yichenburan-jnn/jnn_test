@@ -1,3 +1,4 @@
+import pickle
 import numpy as np
 from qpsolvers import solve_qp
 
