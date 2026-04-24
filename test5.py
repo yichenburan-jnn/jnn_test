@@ -2,6 +2,18 @@ import numpy as np
 from qpsolvers import solve_qp
 
 # ... [前面加载 P, q, G, h 的代码保持不变] ...
+try:
+        with open('P.pkl','rb') as f:
+            P = pickle.load(f)
+        with open('q.pkl','rb') as f:
+            P = pickle.load(f)
+        with open('G.pkl','rb') as f:
+            P = pickle.load(f)
+        with open('h.pkl','rb') as f:
+            P = pickle.load(f)
+    except FileNotFoundError:
+        print("未找到pkl文件")
+        return
 
 print("--- 开始进行约束松弛诊断 ---")
 
